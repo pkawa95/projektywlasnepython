@@ -587,6 +587,9 @@
    'C:\\Program '
    'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_3.13.752.0_x64__qbz5n2kfra8p0\\Lib\\concurrent\\futures\\thread.py',
    'PYMODULE'),
+  ('config',
+   'C:\\Users\\Kawjo\\PycharmProjects\\PythonProject\\projektywlasnepython\\config.py',
+   'PYMODULE'),
   ('configparser',
    'C:\\Program '
    'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_3.13.752.0_x64__qbz5n2kfra8p0\\Lib\\configparser.py',
@@ -1255,6 +1258,9 @@
    'C:\\Program '
    'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_3.13.752.0_x64__qbz5n2kfra8p0\\Lib\\lzma.py',
    'PYMODULE'),
+  ('main',
+   'C:\\Users\\Kawjo\\PycharmProjects\\PythonProject\\projektywlasnepython\\main.py',
+   'PYMODULE'),
   ('mimetypes',
    'C:\\Program '
    'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_3.13.752.0_x64__qbz5n2kfra8p0\\Lib\\mimetypes.py',
@@ -1362,6 +1368,9 @@
   ('numbers',
    'C:\\Program '
    'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_3.13.752.0_x64__qbz5n2kfra8p0\\Lib\\numbers.py',
+   'PYMODULE'),
+  ('onboarding',
+   'C:\\Users\\Kawjo\\PycharmProjects\\PythonProject\\projektywlasnepython\\onboarding.py',
    'PYMODULE'),
   ('opcode',
    'C:\\Program '

@@ -4,7 +4,7 @@ import threading
 import os
 import subprocess
 
-VERSION = "1.0.0"
+VERSION = "1.0.4"
 UPDATE_URL = "https://raw.githubusercontent.com/pkawa95/projektywlasnepython/main/version.txt"
 DOWNLOAD_URL = "https://github.com/pkawa95/projektywlasnepython/releases/latest/download/HueApp.exe"
 
