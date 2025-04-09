@@ -10,9 +10,9 @@ import requests
 import webbrowser
 from update import check_for_updates_with_gui_and_replace
 
-VERSION = "1.0.0"
-UPDATE_URL = "https://raw.githubusercontent.com/twoj_uzytkownik/twoje_repo/main/version.txt"
-REPO_URL = "https://github.com/twoj_uzytkownik/twoje_repo"
+VERSION = "1.0.3"
+UPDATE_URL = "https://raw.githubusercontent.com/pkawa95/projektywlasnepython/main/version.txt"
+REPO_URL = "https://github.com/pkawa95/projektywlasnepython"
 
 class HueGUIApp(ctk.CTk):
     def __init__(self):
@@ -27,6 +27,8 @@ class HueGUIApp(ctk.CTk):
         self.lights_frame = self.lights.create_frame()
         self.info_frame, self.sensor_label, self.motion_label, self.devices_status_label = self.sensors.create_info_frame()
         self.motion_list_frame = self.sensors.create_motion_list_frame()
+        self.version_label = ctk.CTkLabel(self, text=f"Wersja: {VERSION}", font=ctk.CTkFont(size=10), text_color="gray")
+        self.version_label.pack(side="bottom", pady=5)
 
         self.bridge.load_saved_data()
         self.bridge.insert_ip(self.bridge.bridge_ip)
