@@ -2,3 +2,4 @@ bridge_ip.txt
 hue_token.txt
 build/
 dist/
+__pycache__/

@@ -23,6 +23,18 @@ class HueBridge:
         if self.status_label:
             self.status_label.configure(text=text)
 
+    def fetch_groups(self):
+        url = f"http://{self.bridge_ip}/api/{self.token}/groups"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                self.groups = response.json()
+                self.app.display_groups()  # Powiadom aplikację o załadowaniu grup
+            else:
+                self.app.status_label.configure(text="Błąd pobierania grup.")
+        except Exception as e:
+            self.app.status_label.configure(text=f"Błąd połączenia z mostkiem: {e}")
+
     def reset_config(self):
         if os.path.exists(CONFIG_FILE):
             os.remove(CONFIG_FILE)
