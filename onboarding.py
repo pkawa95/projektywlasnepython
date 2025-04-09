@@ -1,78 +1,101 @@
 import customtkinter as ctk
+import tkinter.messagebox as mb
+from update import force_update_from_release
 from config import VERSION
-import os
+import threading
 
+class OnboardingWindow:
+    def __init__(self, app, on_complete_callback):
+        self.app = app
+        self.on_complete_callback = on_complete_callback
+        self.bridge = app.bridge
+        self.init_gui()
 
-class OnboardingWindow(ctk.CTk):
-    def __init__(self):
-        super().__init__()
-        self.title("Konfiguracja Philips Hue")
-        self.geometry("600x400")
+    def init_gui(self):
+        self.window = ctk.CTkToplevel(self.app)
+        self.window.title("Witaj w aplikacji Philips Hue")
+        self.window.geometry("500x400")
+        self.window.grab_set()  # zablokowanie głównego okna
 
-        self.intro_label = ctk.CTkLabel(self, text=f"Aplikacja Philips Hue by Piotr Kawa\nWersja: {VERSION}",
-                                        font=ctk.CTkFont(size=16, weight="bold"))
-        self.intro_label.pack(pady=20)
+        self.status_label = ctk.CTkLabel(self.window, text=f"Aplikacja Philips Hue by Piotr Kawa\nWersja: {VERSION}", font=ctk.CTkFont(size=15, weight="bold"))
+        self.status_label.pack(pady=20)
 
-        self.info_label = ctk.CTkLabel(self, text="Aby rozpocząć konfigurację mostka Hue,\nkliknij poniżej:",
-                                       font=ctk.CTkFont(size=13))
-        self.info_label.pack(pady=10)
+        # Sprawdzenie dostępności aktualizacji
+        self.check_for_updates()
 
-        self.start_button = ctk.CTkButton(self, text="Rozpocznij instalację HUE", command=self.step_one)
-        self.start_button.pack(pady=10)
+    def check_for_updates(self):
+        threading.Thread(target=self._check_for_updates_thread, daemon=True).start()
 
-        self.status_label = ctk.CTkLabel(self, text="", font=ctk.CTkFont(size=12))
-        self.status_label.pack(pady=10)
+    def _check_for_updates_thread(self):
+        force_update_from_release(self.window)
+        self.show_network_permission()
 
-    def step_one(self):
-        self.start_button.destroy()
-        self.info_label.destroy()
+    def show_network_permission(self):
+        self.status_label.configure(text=f"Aplikacja Philips Hue by Piotr Kawa\nWersja: {VERSION}\n\nCzy chcesz rozpocząć konfigurację mostka Hue?")
 
-        self.status_label.configure(text="Wyszukiwanie mostka Hue...")
+        self.permission_var = ctk.BooleanVar()
+        self.permission_checkbox = ctk.CTkCheckBox(self.window, text="Zezwól na przeszukanie sieci lokalnej", variable=self.permission_var)
+        self.permission_checkbox.pack(pady=10)
 
-        # Symulacja statusu onboarding
-        self.after(2000, self.show_checkbox)
+        self.continue_button = ctk.CTkButton(self.window, text="Dalej", command=self.start_bridge_setup)
+        self.continue_button.pack(pady=20)
 
-    def show_checkbox(self):
-        self.checkbox = ctk.CTkCheckBox(self, text="Zezwól na przeszukanie sieci lokalnej", command=self.enable_next)
-        self.checkbox.pack(pady=10)
+    def start_bridge_setup(self):
+        if not self.permission_var.get():
+            mb.showwarning("Wymagane zezwolenie", "Musisz wyrazić zgodę na przeszukanie sieci lokalnej.")
+            return
 
-        self.next_button = ctk.CTkButton(self, text="Dalej", state="disabled", command=self.try_connect)
-        self.next_button.pack(pady=10)
+        self.permission_checkbox.pack_forget()
+        self.continue_button.pack_forget()
+        self.status_label.configure(text="🔍 Szukanie mostka Hue w sieci...")
 
-    def enable_next(self):
-        self.next_button.configure(state="normal")
+        threading.Thread(target=self.find_and_connect_bridge, daemon=True).start()
 
-    def try_connect(self):
-        self.status_label.configure(text="Próba połączenia z mostkiem...")
+    def find_and_connect_bridge(self):
+        found = self.bridge.search_bridge_gui()
 
-        # Symulacja niepowodzenia
-        self.after(3000, self.show_failed)
+        if not found:
+            self.show_retry_instructions()
+            return
 
-    def show_failed(self):
-        self.status_label.configure(text="Instalacja nie powiodła się.\n\nSprawdź:\n- Czy mostek jest włączony\n- Czy jest w tej samej sieci\n\nOdłącz i podłącz mostek ponownie,\nczekaj aż wszystkie diody się zapalą.")
+        self.status_label.configure(text=f"Znaleziono mostek Hue\nIP: {self.bridge.bridge_ip}\n⏳ Oczekiwanie na wciśnięcie przycisku...")
+        success = self.bridge.authorize_gui(timeout=30)
 
-        self.confirm_reset = ctk.CTkCheckBox(self, text="Wszystkie diody się palą", command=self.enable_retry)
-        self.confirm_reset.pack(pady=10)
+        if success:
+            self.bridge.save_ip()
+            self.bridge.save_token()
+            self.status_label.configure(text="✅ Połączono z mostkiem!\nKliknij, aby rozpocząć korzystanie z aplikacji.")
+            ctk.CTkButton(self.window, text="Rozpocznij korzystanie", command=self.complete).pack(pady=15)
+        else:
+            self.show_retry_instructions(press_failed=True)
 
-        self.retry_button = ctk.CTkButton(self, text="Spróbuj jeszcze raz", state="disabled", command=self.retry)
+    def show_retry_instructions(self, press_failed=False):
+        text = "❌ Instalacja nie powiodła się.\n"
+        if press_failed:
+            text += "Nie wykryto wciśnięcia przycisku na mostku Hue.\n"
+        text += "\n🔌 Sprawdź:\n- Czy mostek Hue jest podłączony do prądu\n- Czy znajduje się w tej samej sieci co komputer\n\n"
+        text += "Jeśli problem nadal występuje:\n➡️ Odłącz mostek od prądu i podłącz ponownie\n⬅️ Poczekaj aż zapalą się wszystkie diody"
+
+        self.status_label.configure(text=text)
+
+        self.retry_var = ctk.BooleanVar()
+        self.retry_checkbox = ctk.CTkCheckBox(self.window, text="Wszystkie diody się palą", variable=self.retry_var)
+        self.retry_checkbox.pack(pady=10)
+
+        self.retry_button = ctk.CTkButton(self.window, text="Spróbuj ponownie", command=self.retry_installation)
         self.retry_button.pack(pady=10)
 
-    def enable_retry(self):
-        self.retry_button.configure(state="normal")
+    def retry_installation(self):
+        if not self.retry_var.get():
+            mb.showwarning("Wymagane potwierdzenie", "Zaznacz, że wszystkie diody się palą, zanim spróbujesz ponownie.")
+            return
 
-    def retry(self):
-        self.status_label.configure(text="Ponawianie instalacji...")
-        self.retry_button.configure(state="disabled")
-        self.confirm_reset.configure(state="disabled")
-        self.after(3000, self.complete)
+        self.retry_checkbox.pack_forget()
+        self.retry_button.pack_forget()
+        self.status_label.configure(text="🔁 Ponowne wyszukiwanie mostka...")
+
+        threading.Thread(target=self.find_and_connect_bridge, daemon=True).start()
 
     def complete(self):
-        self.status_label.configure(text="Połączono z mostkiem!\nMożesz rozpocząć korzystanie z aplikacji.")
-        self.launch_button = ctk.CTkButton(self, text="Uruchom aplikację", command=self.launch_main_app)
-        self.launch_button.pack(pady=10)
-
-    def launch_main_app(self):
-        self.destroy()
-        from main import HueGUIApp
-        app = HueGUIApp()
-        app.mainloop()
+        self.window.destroy()
+        self.on_complete_callback()

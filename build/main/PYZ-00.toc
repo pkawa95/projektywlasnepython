@@ -1258,9 +1258,6 @@
    'C:\\Program '
    'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_3.13.752.0_x64__qbz5n2kfra8p0\\Lib\\lzma.py',
    'PYMODULE'),
-  ('main',
-   'C:\\Users\\Kawjo\\PycharmProjects\\PythonProject\\projektywlasnepython\\main.py',
-   'PYMODULE'),
   ('mimetypes',
    'C:\\Program '
    'Files\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_3.13.752.0_x64__qbz5n2kfra8p0\\Lib\\mimetypes.py',
