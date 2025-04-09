@@ -5,38 +5,52 @@ import tkinter.messagebox
 import customtkinter as ctk
 from config import VERSION, UPDATE_URL
 
-import requests
-import json
-import webbrowser
-
 
 def check_for_updates_with_gui_and_replace(app):
-    try:
-        # Pobierz plik version.txt z GitHub
-        response = requests.get(app.UPDATE_URL)
+    def check():
+        try:
+            response = requests.get(UPDATE_URL, timeout=5)
+            response.raise_for_status()
+            version_data = response.json()
 
-        # Sprawdź odpowiedź
-        if response.status_code == 200:
-            version_info = response.json()
-            print("Odpowiedź z serwera: ", version_info)  # Debugging
-        else:
-            print("Błąd pobierania pliku version.txt, status:", response.status_code)
-            return
+            latest_version = version_data.get("version")
+            exe_url = version_data.get("exe_url")
 
-        latest_version = version_info["version"]
-        exe_url = version_info["exe_url"]
+            if latest_version and latest_version != VERSION:
+                def download_and_replace():
+                    app.status_label.configure(text="🔄 Pobieranie aktualizacji...")
 
-        print(f"Sprawdzanie aktualizacji: lokalna wersja {app.VERSION}, najnowsza wersja {latest_version}")
+                    response = requests.get(exe_url, stream=True)
+                    new_exe_path = os.path.join(os.getcwd(), "HueApp_NEW.exe")
 
-        # Porównaj wersję lokalną z wersją na serwerze
-        if latest_version != app.VERSION:
-            print(f"Dostępna nowa wersja: {latest_version}")
-            app.show_update_popup(latest_version, exe_url)
-        else:
-            print("Aplikacja jest aktualna.")
-            app.update_status("Aplikacja jest aktualna.")
-    except Exception as e:
-        print(f"Error checking for updates: {e}")
+                    with open(new_exe_path, "wb") as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+
+                    app.status_label.configure(text="✅ Pobieranie zakończone. Uruchom nową wersję.")
+                    tkinter.messagebox.showinfo("Zaktualizowano", "Nowa wersja została pobrana jako 'HueApp_NEW.exe'")
+
+                update_window = ctk.CTkToplevel(app)
+                update_window.title("Aktualizacja dostępna")
+                update_window.geometry("400x200")
+
+                label = ctk.CTkLabel(update_window, text=f"Dostępna wersja: {latest_version}\nTwoja wersja: {VERSION}", font=ctk.CTkFont(size=14))
+                label.pack(pady=20)
+
+                update_button = ctk.CTkButton(update_window, text="Aktualizuj teraz", command=lambda: [
+                    update_window.destroy(),
+                    download_and_replace()
+                ])
+                update_button.pack(pady=10)
+
+                cancel_button = ctk.CTkButton(update_window, text="Zamknij", command=update_window.destroy)
+                cancel_button.pack()
+
+        except Exception as e:
+            print(f"[Aktualizator] Błąd sprawdzania wersji: {e}")
+
+    import threading
+    threading.Thread(target=check, daemon=True).start()
 
 
 def force_update_from_release(parent):
