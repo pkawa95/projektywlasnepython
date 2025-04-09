@@ -10,7 +10,7 @@ import requests
 import webbrowser
 from update import check_for_updates_with_gui_and_replace
 
-VERSION = "1.0.3"
+VERSION = "1.0.4"
 UPDATE_URL = "https://raw.githubusercontent.com/pkawa95/projektywlasnepython/main/version.txt"
 REPO_URL = "https://github.com/pkawa95/projektywlasnepython"
 
@@ -40,13 +40,11 @@ class HueGUIApp(ctk.CTk):
         check_for_updates_with_gui_and_replace(self)
 
     def initialize_connection(self):
-        ip_input = self.bridge.get_ip_entry()
-        if ip_input:
-            self.bridge.bridge_ip = ip_input
-            self.bridge.save_ip()
-            self.after(100, self.try_auth_or_fetch)
+        if self.bridge.token:
+            self.bridge.update_status("Token znaleziony, łączenie...")
+            self.start_auto_updater()
         else:
-            self.bridge.search_bridge(self.try_auth_or_fetch)
+            self.bridge.connect_fully_automatic(self.start_auto_updater)
 
     def try_auth_or_fetch(self):
         if self.bridge.token:

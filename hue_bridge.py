@@ -1,37 +1,22 @@
-
 import os
 import requests
-import customtkinter as ctk
+import threading
+import time
 
-TOKEN_FILE = "../hue_token.txt"
-IP_FILE = "../bridge_ip.txt"
-DISCOVERY_URL = "https://discovery.meethue.com"
+TOKEN_FILE = "hue_token.txt"
+IP_FILE = "bridge_ip.txt"
 APP_NAME = "hue_gui_app"
 DEVICE_NAME = "customtk_gui"
 
 class HueBridge:
     def __init__(self, app):
         self.app = app
-        self.bridge_ip = None
         self.token = None
+        self.bridge_ip = None
 
-        self.status_label = ctk.CTkLabel(app, text="Inicjalizacja...", font=ctk.CTkFont(size=14))
-        self.status_label.pack(pady=10)
-
-        self.ip_entry = ctk.CTkEntry(app, placeholder_text="Wpisz IP mostka (opcjonalnie)")
-        self.ip_entry.pack(pady=5)
-
-        self.connect_button = ctk.CTkButton(app, text="Połącz z mostkiem", command=app.initialize_connection)
-        self.connect_button.pack(pady=10)
-
-        self.reset_button = ctk.CTkButton(app, text="Resetuj token i IP", command=self.reset_data)
-        self.reset_button.pack(pady=5)
-
-    def update_status(self, text):
-        self.status_label.configure(text=text)
-
-    def get_ip_entry(self):
-        return self.ip_entry.get().strip()
+        # UI elementy
+        self.status_label = None
+        self.ip_entry = None
 
     def load_saved_data(self):
         if os.path.exists(IP_FILE):
@@ -40,10 +25,6 @@ class HueBridge:
         if os.path.exists(TOKEN_FILE):
             with open(TOKEN_FILE, 'r') as f:
                 self.token = f.read().strip()
-
-    def insert_ip(self, ip):
-        if ip:
-            self.ip_entry.insert(0, ip)
 
     def save_token(self):
         with open(TOKEN_FILE, 'w') as f:
@@ -54,33 +35,42 @@ class HueBridge:
             with open(IP_FILE, 'w') as f:
                 f.write(self.bridge_ip)
 
-    def reset_data(self):
-        for file in [TOKEN_FILE, IP_FILE]:
-            if os.path.exists(file):
-                os.remove(file)
-        self.token = None
-        self.bridge_ip = None
-        self.ip_entry.delete(0, 'end')
-        self.update_status("Zresetowano. Wpisz IP lub kliknij Połącz.")
+    def insert_ip(self, ip):
+        # Ustaw pole tekstowe IP, jeśli istnieje
+        if hasattr(self.app, "ip_entry") and self.app.ip_entry:
+            self.app.ip_entry.delete(0, "end")
+            self.app.ip_entry.insert(0, ip)
 
-    def search_bridge(self, callback):
-        def worker():
+    def get_ip_entry(self):
+        if hasattr(self.app, "ip_entry") and self.app.ip_entry:
+            return self.app.ip_entry.get().strip()
+        return ""
+
+    def update_status(self, message):
+        if hasattr(self.app, "status_label") and self.app.status_label:
+            self.app.status_label.configure(text=message)
+        print(f"[Bridge] {message}")
+
+    def search_bridge(self, on_found_callback):
+        def _search():
             try:
-                res = requests.get(DISCOVERY_URL, timeout=5).json()
+                res = requests.get("https://discovery.meethue.com", timeout=5).json()
                 if res:
                     self.bridge_ip = res[0]["internalipaddress"]
                     self.save_ip()
                     self.update_status(f"Znaleziono mostek: {self.bridge_ip}")
-                    self.app.after(100, callback)
+                    self.app.after(100, on_found_callback)
                 else:
                     self.update_status("Nie znaleziono mostka. Wpisz IP ręcznie.")
             except Exception:
-                self.update_status("Błąd wyszukiwania. Wpisz IP ręcznie.")
-        import threading
-        threading.Thread(target=worker).start()
+                self.update_status("Błąd wyszukiwania mostka.")
 
-    def authorize(self, on_success):
-        def worker():
+        threading.Thread(target=_search, daemon=True).start()
+
+    def authorize(self, on_success_callback):
+        self.update_status("Oczekiwanie na wciśnięcie przycisku na mostku Hue...")
+
+        def wait_for_button():
             url = f"http://{self.bridge_ip}/api"
             data = {"devicetype": f"{APP_NAME}#{DEVICE_NAME}"}
             for _ in range(30):
@@ -90,12 +80,30 @@ class HueBridge:
                         self.token = res["success"]["username"]
                         self.save_token()
                         self.update_status("Połączono! Token zapisany.")
-                        self.app.after(100, on_success)
+                        on_success_callback()
                         return
                 except Exception:
                     pass
-                import time
                 time.sleep(1)
             self.update_status("Nie udało się połączyć. Spróbuj ponownie.")
-        import threading
-        threading.Thread(target=worker).start()
+
+        threading.Thread(target=wait_for_button, daemon=True).start()
+
+    def connect_fully_automatic(self, on_success_callback):
+        self.update_status("Szukam mostka w sieci...")
+
+        def do_connection():
+            try:
+                res = requests.get("https://discovery.meethue.com", timeout=5).json()
+                if not res:
+                    self.update_status("Nie znaleziono mostka.")
+                    return
+                self.bridge_ip = res[0]["internalipaddress"]
+                self.save_ip()
+                self.update_status(f"Znaleziono mostek: {self.bridge_ip}")
+                time.sleep(1)
+                self.authorize(on_success_callback)
+            except Exception as e:
+                self.update_status(f"Błąd łączenia: {e}")
+
+        threading.Thread(target=do_connection, daemon=True).start()
