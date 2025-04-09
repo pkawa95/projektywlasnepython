@@ -58,3 +58,5 @@ start HueApp.exe
                 update_btn.pack(pady=5)
     except Exception as e:
         print(f"Błąd sprawdzania aktualizacji: {e}")
+
+UPDATE_URL = "https://raw.githubusercontent.com/pkawa95/projektywlasnepython/main/version.txt"
