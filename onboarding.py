@@ -50,7 +50,6 @@ class OnboardingWindow(ctk.CTkToplevel):
             return
 
         self.stage = 1
-        self.update_label.configure(text="")
         self.start_button.configure(state="disabled")
         self.check_network_checkbox.configure(state="disabled")
 
