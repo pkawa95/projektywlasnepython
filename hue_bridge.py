@@ -1,4 +1,3 @@
-#hue_bridge.py
 import requests
 import os
 import json
@@ -15,8 +14,8 @@ class HueBridge:
         self.app = app
         self.bridge_ip = None
         self.token = None
+        self.groups = {}
         self.status_label = None
-
         self.load_saved_data()
 
     def update_status(self, text):
@@ -30,25 +29,11 @@ class HueBridge:
             response = requests.get(url)
             if response.status_code == 200:
                 self.groups = response.json()
-                self.app.display_groups()  # Powiadom aplikację o załadowaniu grup
+                self.app.display_groups()
             else:
-                self.app.status_label.configure(text="Błąd pobierania grup.")
+                self.update_status("Błąd pobierania grup.")
         except Exception as e:
-            self.app.status_label.configure(text=f"Błąd połączenia z mostkiem: {e}")
-
-    def fetch_groups(self):
-        url = f"http://{self.bridge_ip}/api/{self.token}/groups"
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                self.groups = response.json()
-                if hasattr(self.app, "display_groups"):
-                    self.app.after(200, self.app.display_groups)
-            # Powiadom aplikację o załadowaniu grup
-            else:
-                self.app.status_label.configure(text="Błąd pobierania grup.")
-        except Exception as e:
-            self.app.status_label.configure(text=f"Błąd połączenia z mostkiem: {e}")
+            self.update_status(f"Błąd połączenia z mostkiem: {e}")
 
     def reset_config(self):
         if os.path.exists(CONFIG_FILE):
