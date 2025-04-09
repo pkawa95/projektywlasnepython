@@ -1,3 +1,4 @@
+#sensor_manager.py
 import customtkinter as ctk
 import requests
 from datetime import datetime

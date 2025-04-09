@@ -1,3 +1,4 @@
+#onboarding
 import customtkinter as ctk
 from update import force_update_from_release
 
