@@ -6,34 +6,42 @@ from light_manager import LightManager
 from sensor_manager import SensorManager
 from update import check_for_updates_with_gui_and_replace
 from config import VERSION
+import tkinter.colorchooser as cc
 
 
 class HueGUIApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Hue Controller")
-        self.geometry("650x800")
+        self.geometry("720x860")
+
+        # Styl globalny
+        ctk.set_default_color_theme("blue")
+        ctk.set_appearance_mode("dark")
+        self.font_title = ctk.CTkFont(size=16, weight="bold")
+        self.font_normal = ctk.CTkFont(size=13)
 
         self.bridge = HueBridge(self)
         self.lights = LightManager(self, self.bridge)
         self.sensors = SensorManager(self, self.bridge)
 
-        self.status_label = ctk.CTkLabel(self, text="Inicjalizacja...", font=ctk.CTkFont(size=14))
-        self.status_label.pack(pady=5)
+        self.status_label = ctk.CTkLabel(self, text="🔄 Inicjalizacja...", font=self.font_normal)
+        self.status_label.pack(pady=8)
         self.bridge.status_label = self.status_label
 
-        self.reset_button = ctk.CTkButton(self, text="Resetuj token i IP", command=self.bridge.reset_config)
-        self.reset_button.pack(pady=5)
+        self.reset_button = ctk.CTkButton(self, text="🔁 Resetuj token i IP", command=self.bridge.reset_config)
+        self.reset_button.pack(pady=8)
 
-        self.lights_frame = ctk.CTkScrollableFrame(self, width=600, height=300)
+        self.lights_frame = ctk.CTkScrollableFrame(self, width=680, height=400, corner_radius=14)
         self.lights_frame.pack(pady=10, padx=10, fill="both", expand=True)
 
         self.group_widgets = {}
+
         self.info_frame, self.sensor_label, self.motion_label, self.devices_status_label = self.sensors.create_info_frame()
         self.motion_list_frame = self.sensors.create_motion_list_frame()
 
-        self.version_label = ctk.CTkLabel(self, text=f"📦 Wersja aplikacji: {VERSION}", font=ctk.CTkFont(size=12))
-        self.version_label.pack(pady=5)
+        self.version_label = ctk.CTkLabel(self, text=f"📦 Wersja aplikacji: {VERSION}", font=self.font_normal)
+        self.version_label.pack(pady=10)
 
         self.after(100, self.check_for_updates)
         self.after(300, self.initialize_connection)
@@ -43,7 +51,7 @@ class HueGUIApp(ctk.CTk):
 
     def initialize_connection(self):
         if self.bridge.bridge_ip and self.bridge.token:
-            self.bridge.update_status("Token znaleziony, łączenie...")
+            self.bridge.update_status("✅ Token znaleziony, łączenie...")
             self.start_auto_updater()
         else:
             self.bridge.connect_fully_automatic(self.start_auto_updater)
@@ -55,10 +63,34 @@ class HueGUIApp(ctk.CTk):
                 self.bridge.fetch_groups()
                 self.display_groups()
                 self.sensors.fetch()
-                time.sleep(5)
+                time.sleep(1)
 
         import threading
         threading.Thread(target=update_loop, daemon=True).start()
+
+    def set_brightness(self, light_id, bri):
+        url = f"http://{self.bridge.bridge_ip}/api/{self.bridge.token}/lights/{light_id}/state"
+        try:
+            requests.put(url, json={"bri": int(bri), "on": True})
+        except Exception as e:
+            self.bridge.update_status(f"❌ Błąd jasności: {e}")
+
+    def set_group_brightness(self, group_id, bri):
+        url = f"http://{self.bridge.bridge_ip}/api/{self.bridge.token}/groups/{group_id}/action"
+        try:
+            requests.put(url, json={"bri": int(bri), "on": True})
+        except Exception as e:
+            self.bridge.update_status(f"❌ Błąd jasności grupy: {e}")
+
+    def choose_group_color(self, group_id):
+        rgb, _ = cc.askcolor()
+        if rgb:
+            x, y = self.rgb_to_xy(*rgb)
+            url = f"http://{self.bridge.bridge_ip}/api/{self.bridge.token}/groups/{group_id}/action"
+            try:
+                requests.put(url, json={"xy": [x, y], "on": True})
+            except Exception as e:
+                self.bridge.update_status(f"❌ Błąd koloru grupy: {e}")
 
     def display_groups(self):
         groups = self.bridge.groups
@@ -69,14 +101,31 @@ class HueGUIApp(ctk.CTk):
             group_state = group_info["action"]["on"]
 
             if group_id not in self.group_widgets:
-                group_frame = ctk.CTkFrame(self.lights_frame)
-                group_frame.pack(pady=10, padx=10, fill="x")
+                group_frame = ctk.CTkFrame(self.lights_frame, corner_radius=14)
+                group_frame.pack(pady=14, padx=16, fill="x")
 
-                label = ctk.CTkLabel(group_frame, text=group_name, font=ctk.CTkFont(size=14, weight="bold"))
+                label = ctk.CTkLabel(group_frame, text=group_name, font=self.font_title)
                 label.pack(side="left", padx=10)
 
-                toggle_button = ctk.CTkButton(group_frame, text="", command=lambda i=group_id: self.toggle_group(i))
+                toggle_button = ctk.CTkButton(
+                    group_frame,
+                    text="Wyłącz" if group_state else "Włącz",
+                    command=lambda i=group_id: self.toggle_group(i)
+                )
                 toggle_button.pack(side="left", padx=10)
+                # Suwak jasności grupy
+                bri = group_info["action"].get("bri", 254)
+                group_brightness = ctk.CTkSlider(group_frame, from_=1, to=254, number_of_steps=253, width=100)
+                group_brightness.set(bri)
+                group_brightness.pack(side="left", padx=10)
+                group_brightness.bind("<ButtonRelease-1>",
+                                      lambda event, i=group_id, s=group_brightness: self.set_group_brightness(i,
+                                                                                                              s.get()))
+
+                # Przycisk koloru dla grupy
+                group_color_button = ctk.CTkButton(group_frame, text="Kolor",
+                                                   command=lambda i=group_id: self.choose_group_color(i))
+                group_color_button.pack(side="left", padx=10)
 
                 self.group_widgets[group_id] = {
                     "frame": group_frame,
@@ -97,16 +146,30 @@ class HueGUIApp(ctk.CTk):
                 light_widgets = self.group_widgets[group_id]["lights"]
 
                 if light_id not in light_widgets:
-                    light_frame = ctk.CTkFrame(self.group_widgets[group_id]["frame"])
-                    light_frame.pack(pady=5, padx=20, fill="x")
+                    light_frame = ctk.CTkFrame(self.group_widgets[group_id]["frame"], corner_radius=12)
+                    light_frame.pack(pady=4, padx=20, fill="x")
 
-                    label = ctk.CTkLabel(light_frame, text=light_name, font=ctk.CTkFont(size=12))
+                    label = ctk.CTkLabel(light_frame, text=light_name, font=self.font_normal)
                     label.pack(side="left", padx=10)
 
-                    toggle = ctk.CTkButton(light_frame, text="", command=lambda i=light_id: self.toggle_light(i))
+                    toggle = ctk.CTkButton(
+                        light_frame,
+                        text="Wyłącz" if light_state["on"] else "Włącz",
+                        command=lambda i=light_id: self.toggle_light(i)
+                    )
                     toggle.pack(side="left", padx=10)
 
-                    color_button = ctk.CTkButton(light_frame, text="Kolor", command=lambda i=light_id: self.choose_color(i))
+                    # Suwak jasności
+                    if "bri" in light_state:
+                        slider = ctk.CTkSlider(light_frame, from_=1, to=254, number_of_steps=253)
+                        slider.set(light_state["bri"])
+                        slider.pack(side="left", padx=10, fill="x", expand=True)
+                        slider.bind("<ButtonRelease-1>",
+                                    lambda event, i=light_id, s=slider: self.set_brightness(i, s.get()))
+
+                    # Przycisk wyboru koloru
+                    color_button = ctk.CTkButton(light_frame, text="Kolor",
+                                                 command=lambda i=light_id: self.choose_color(i))
                     color_button.pack(side="left", padx=10)
 
                     light_widgets[light_id] = {
@@ -123,7 +186,7 @@ class HueGUIApp(ctk.CTk):
         try:
             requests.put(url, json={"on": new_state})
         except Exception as e:
-            self.bridge.update_status(f"Błąd grupy: {e}")
+            self.bridge.update_status(f"❌ Błąd grupy: {e}")
 
     def toggle_light(self, light_id):
         light = self.lights.lights.get(light_id)
@@ -133,10 +196,9 @@ class HueGUIApp(ctk.CTk):
             try:
                 requests.put(url, json={"on": new_state})
             except Exception as e:
-                self.bridge.update_status(f"Błąd światła: {e}")
+                self.bridge.update_status(f"❌ Błąd światła: {e}")
 
     def choose_color(self, light_id):
-        import tkinter.colorchooser as cc
         rgb, _ = cc.askcolor()
         if rgb:
             x, y = self.rgb_to_xy(*rgb)
@@ -144,7 +206,7 @@ class HueGUIApp(ctk.CTk):
             try:
                 requests.put(url, json={"xy": [x, y], "on": True})
             except Exception as e:
-                self.bridge.update_status(f"Błąd koloru: {e}")
+                self.bridge.update_status(f"❌ Błąd koloru: {e}")
 
     def rgb_to_xy(self, r, g, b):
         r, g, b = [x / 255.0 for x in (r, g, b)]
@@ -162,7 +224,5 @@ class HueGUIApp(ctk.CTk):
 
 
 if __name__ == "__main__":
-    ctk.set_appearance_mode("System")
-    ctk.set_default_color_theme("dark-blue")
     app = HueGUIApp()
     app.mainloop()
