@@ -6,7 +6,7 @@ import subprocess
 
 VERSION = "1.0.0"
 UPDATE_URL = "https://raw.githubusercontent.com/twoj_uzytkownik/twoje_repo/main/version.txt"
-DOWNLOAD_URL = "https://github.com/twoj_uzytkownik/twoje_repo/releases/latest/download/HueApp.exe"
+DOWNLOAD_URL = "https://github.com/pkawa95/projektywlasnepython/releases/latest/download/HueApp.exe"
 
 def check_for_updates_with_gui_and_replace(app):
     try:
