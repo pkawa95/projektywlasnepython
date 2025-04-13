@@ -1,4 +1,4 @@
 {
   "version": "1.0.8",
-  "exe_url": "https://github.com/pkawa95/projektywlasnepython/releases/download/1%2C0.6/HueApp.exe"
+  "exe_url": "https://github.com/pkawa95/projektywlasnepython/releases/download/1.0.8/HueApp.exe"
 }
