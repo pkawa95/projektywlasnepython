@@ -1,101 +1,76 @@
 import customtkinter as ctk
-import tkinter.messagebox as mb
-from update import force_update_from_release
-from config import VERSION
+from update import force_update_with_progress
 import threading
 
-class OnboardingWindow:
-    def __init__(self, app, on_complete_callback):
-        self.app = app
-        self.on_complete_callback = on_complete_callback
-        self.bridge = app.bridge
-        self.init_gui()
 
-    def init_gui(self):
-        self.window = ctk.CTkToplevel(self.app)
-        self.window.title("Witaj w aplikacji Philips Hue")
-        self.window.geometry("500x400")
-        self.window.grab_set()  # zablokowanie głównego okna
+class OnboardingWindow(ctk.CTkToplevel):
+    def __init__(self, master, proceed_callback):
+        super().__init__(master)
+        self.title("Witaj w Philips Hue App by Piotr Kawa")
+        self.geometry("560x500")
+        self.resizable(False, False)
 
-        self.status_label = ctk.CTkLabel(self.window, text=f"Aplikacja Philips Hue by Piotr Kawa\nWersja: {VERSION}", font=ctk.CTkFont(size=15, weight="bold"))
-        self.status_label.pack(pady=20)
+        self.master = master
+        self.bridge = master.bridge
+        self.proceed_callback = proceed_callback
 
-        # Sprawdzenie dostępności aktualizacji
-        self.check_for_updates()
+        self.label = ctk.CTkLabel(self, text="Witaj w aplikacji Philips Hue", font=ctk.CTkFont(size=20, weight="bold"))
+        self.label.pack(pady=(20, 10))
 
-    def check_for_updates(self):
-        threading.Thread(target=self._check_for_updates_thread, daemon=True).start()
+        self.version_label = ctk.CTkLabel(self, text=f"Zainstalowana wersja: {master.VERSION}", font=ctk.CTkFont(size=14))
+        self.version_label.pack()
 
-    def _check_for_updates_thread(self):
-        force_update_from_release(self.window)
-        self.show_network_permission()
+        self.status_label = ctk.CTkLabel(self, text="🔍 Trwa wyszukiwanie mostka...", font=ctk.CTkFont(size=13))
+        self.status_label.pack(pady=(20, 10))
 
-    def show_network_permission(self):
-        self.status_label.configure(text=f"Aplikacja Philips Hue by Piotr Kawa\nWersja: {VERSION}\n\nCzy chcesz rozpocząć konfigurację mostka Hue?")
+        self.check_button = ctk.CTkCheckBox(self, text="💡 Świeci się niebieska dioda na mostku", command=self.toggle_confirm)
+        self.check_button.pack(pady=(5, 5))
 
-        self.permission_var = ctk.BooleanVar()
-        self.permission_checkbox = ctk.CTkCheckBox(self.window, text="Zezwól na przeszukanie sieci lokalnej", variable=self.permission_var)
-        self.permission_checkbox.pack(pady=10)
+        self.confirmed = False
 
-        self.continue_button = ctk.CTkButton(self.window, text="Dalej", command=self.start_bridge_setup)
-        self.continue_button.pack(pady=20)
+        self.info_label = ctk.CTkLabel(
+            self,
+            text="Upewnij się, że mostek jest podłączony do zasilania i routera.\nPo jego wykryciu naciśnij przycisk na mostku.",
+            font=ctk.CTkFont(size=12),
+            wraplength=400,
+            justify="center"
+        )
+        self.info_label.pack(pady=(10, 15))
 
-    def start_bridge_setup(self):
-        if not self.permission_var.get():
-            mb.showwarning("Wymagane zezwolenie", "Musisz wyrazić zgodę na przeszukanie sieci lokalnej.")
-            return
+        self.start_button = ctk.CTkButton(self, text="Rozpocznij instalację HUE", state="disabled", command=self.begin_installation)
+        self.start_button.pack(pady=(10, 20))
 
-        self.permission_checkbox.pack_forget()
-        self.continue_button.pack_forget()
-        self.status_label.configure(text="🔍 Szukanie mostka Hue w sieci...")
+        self.tips_label = ctk.CTkLabel(
+            self,
+            text="❓ Masz problem?\n- Sprawdź połączenie z siecią lokalną\n- Sprawdź, czy mostek jest zasilany\n- Naciśnij fizyczny przycisk na mostku",
+            font=ctk.CTkFont(size=11),
+            text_color="gray",
+            wraplength=450,
+            justify="left"
+        )
+        self.tips_label.pack(pady=(10, 10))
 
-        threading.Thread(target=self.find_and_connect_bridge, daemon=True).start()
+        self.update_button = ctk.CTkButton(self, text="Sprawdź aktualizacje", command=lambda: force_update_with_progress(self))
+        self.update_button.pack(pady=(0, 10))
 
-    def find_and_connect_bridge(self):
-        found = self.bridge.search_bridge_gui()
+        self.after(300, self.find_bridge)
 
-        if not found:
-            self.show_retry_instructions()
-            return
+    def toggle_confirm(self):
+        self.confirmed = self.check_button.get()
+        self.start_button.configure(state="normal" if self.confirmed else "disabled")
 
-        self.status_label.configure(text=f"Znaleziono mostek Hue\nIP: {self.bridge.bridge_ip}\n⏳ Oczekiwanie na wciśnięcie przycisku...")
-        success = self.bridge.authorize_gui(timeout=30)
+    def find_bridge(self):
+        def worker():
+            self.bridge.connect_fully_automatic(self.bridge_found_success)
+        threading.Thread(target=worker, daemon=True).start()
 
-        if success:
-            self.bridge.save_ip()
-            self.bridge.save_token()
-            self.status_label.configure(text="✅ Połączono z mostkiem!\nKliknij, aby rozpocząć korzystanie z aplikacji.")
-            ctk.CTkButton(self.window, text="Rozpocznij korzystanie", command=self.complete).pack(pady=15)
-        else:
-            self.show_retry_instructions(press_failed=True)
+    def bridge_found_success(self):
+        self.status_label.configure(text=f"✅ Mostek wykryty: {self.bridge.bridge_ip}\n⚠️ Wciśnij przycisk na mostku, aby zakończyć instalację.")
 
-    def show_retry_instructions(self, press_failed=False):
-        text = "❌ Instalacja nie powiodła się.\n"
-        if press_failed:
-            text += "Nie wykryto wciśnięcia przycisku na mostku Hue.\n"
-        text += "\n🔌 Sprawdź:\n- Czy mostek Hue jest podłączony do prądu\n- Czy znajduje się w tej samej sieci co komputer\n\n"
-        text += "Jeśli problem nadal występuje:\n➡️ Odłącz mostek od prądu i podłącz ponownie\n⬅️ Poczekaj aż zapalą się wszystkie diody"
+    def begin_installation(self):
+        self.status_label.configure(text="⌛ Oczekiwanie na przycisk na mostku (30s)...")
+        self.bridge.request_token(self.on_token_received)
 
-        self.status_label.configure(text=text)
-
-        self.retry_var = ctk.BooleanVar()
-        self.retry_checkbox = ctk.CTkCheckBox(self.window, text="Wszystkie diody się palą", variable=self.retry_var)
-        self.retry_checkbox.pack(pady=10)
-
-        self.retry_button = ctk.CTkButton(self.window, text="Spróbuj ponownie", command=self.retry_installation)
-        self.retry_button.pack(pady=10)
-
-    def retry_installation(self):
-        if not self.retry_var.get():
-            mb.showwarning("Wymagane potwierdzenie", "Zaznacz, że wszystkie diody się palą, zanim spróbujesz ponownie.")
-            return
-
-        self.retry_checkbox.pack_forget()
-        self.retry_button.pack_forget()
-        self.status_label.configure(text="🔁 Ponowne wyszukiwanie mostka...")
-
-        threading.Thread(target=self.find_and_connect_bridge, daemon=True).start()
-
-    def complete(self):
-        self.window.destroy()
-        self.on_complete_callback()
+    def on_token_received(self):
+        self.status_label.configure(text="✅ Token uzyskany! Uruchamiam aplikację...")
+        self.after(1000, self.proceed_callback)

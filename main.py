@@ -1,21 +1,20 @@
-import customtkinter as ctk
-import time
 import requests
+import tkinter.colorchooser as cc
+import customtkinter as ctk
+from onboarding import OnboardingWindow
 from hue_bridge import HueBridge
 from light_manager import LightManager
 from sensor_manager import SensorManager
 from update import check_for_updates_with_gui_and_replace
 from config import VERSION
-import tkinter.colorchooser as cc
-
 
 class HueGUIApp(ctk.CTk):
     def __init__(self):
         super().__init__()
+        self.VERSION = VERSION
         self.title("Hue Controller")
         self.geometry("720x860")
 
-        # Styl globalny
         ctk.set_default_color_theme("blue")
         ctk.set_appearance_mode("dark")
         self.font_title = ctk.CTkFont(size=16, weight="bold")
@@ -24,6 +23,12 @@ class HueGUIApp(ctk.CTk):
         self.bridge = HueBridge(self)
         self.lights = LightManager(self, self.bridge)
         self.sensors = SensorManager(self, self.bridge)
+
+        self.onboarding = OnboardingWindow(self, self.start_main_app)
+        self.onboarding.grab_set()
+
+    def start_main_app(self):
+        self.onboarding.destroy()
 
         self.status_label = ctk.CTkLabel(self, text="🔄 Inicjalizacja...", font=self.font_normal)
         self.status_label.pack(pady=8)
@@ -34,7 +39,6 @@ class HueGUIApp(ctk.CTk):
 
         self.lights_frame = ctk.CTkScrollableFrame(self, width=680, height=400, corner_radius=14)
         self.lights_frame.pack(pady=10, padx=10, fill="both", expand=True)
-
         self.group_widgets = {}
 
         self.info_frame, self.sensor_label, self.motion_label, self.devices_status_label = self.sensors.create_info_frame()
@@ -43,54 +47,25 @@ class HueGUIApp(ctk.CTk):
         self.version_label = ctk.CTkLabel(self, text=f"📦 Wersja aplikacji: {VERSION}", font=self.font_normal)
         self.version_label.pack(pady=10)
 
-        self.after(100, self.check_for_updates)
-        self.after(300, self.initialize_connection)
+        self.after(200, self.check_for_updates)
+        self.after(400, self.start_auto_updater)
 
     def check_for_updates(self):
         check_for_updates_with_gui_and_replace(self)
 
-    def initialize_connection(self):
-        if self.bridge.bridge_ip and self.bridge.token:
-            self.bridge.update_status("✅ Token znaleziony, łączenie...")
-            self.start_auto_updater()
-        else:
-            self.bridge.connect_fully_automatic(self.start_auto_updater)
-
     def start_auto_updater(self):
-        def update_loop():
+        import time, threading
+        def loop():
             while True:
                 self.lights.fetch()
                 self.bridge.fetch_groups()
                 self.display_groups()
                 self.sensors.fetch()
-                time.sleep(1)
+                time.sleep(3)
+        threading.Thread(target=loop, daemon=True).start()
 
-        import threading
-        threading.Thread(target=update_loop, daemon=True).start()
-
-    def set_brightness(self, light_id, bri):
-        url = f"http://{self.bridge.bridge_ip}/api/{self.bridge.token}/lights/{light_id}/state"
-        try:
-            requests.put(url, json={"bri": int(bri), "on": True})
-        except Exception as e:
-            self.bridge.update_status(f"❌ Błąd jasności: {e}")
-
-    def set_group_brightness(self, group_id, bri):
-        url = f"http://{self.bridge.bridge_ip}/api/{self.bridge.token}/groups/{group_id}/action"
-        try:
-            requests.put(url, json={"bri": int(bri), "on": True})
-        except Exception as e:
-            self.bridge.update_status(f"❌ Błąd jasności grupy: {e}")
-
-    def choose_group_color(self, group_id):
-        rgb, _ = cc.askcolor()
-        if rgb:
-            x, y = self.rgb_to_xy(*rgb)
-            url = f"http://{self.bridge.bridge_ip}/api/{self.bridge.token}/groups/{group_id}/action"
-            try:
-                requests.put(url, json={"xy": [x, y], "on": True})
-            except Exception as e:
-                self.bridge.update_status(f"❌ Błąd koloru grupy: {e}")
+    def display_groups(self):
+        pass
 
     def display_groups(self):
         groups = self.bridge.groups
