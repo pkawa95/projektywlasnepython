@@ -3,17 +3,17 @@ translations = {
         "app_title": "Aplikacja Philips Hue",
         "welcome_text": "Witaj w aplikacji Philips Hue",
         "sensor_error": "Błąd czujników: {e}",
-        "motion_detected": "Ruch wykryty! 🕺 ({formatted_time})",
+        "motion_detected": "Ruch wykryty! 🚺 ({formatted_time})",
         "last_motion": "Ostatni ruch: {formatted_time}",
+        "motion_detected_short": "Wykryto ruch",
+        "last_motion_short": "Ostatni ruch",
         "no_motion_sensors": "Brak czujników ruchu.",
         "no_temperature_sensors": "Brak czujników temperatury.",
         "average_temperature": "Średnia temperatura: {avg_temp:.1f}°C",
         "devices_status": "Wykryto: {lights} światła, {temps} temp., {motions} czujników ruchu",
         "check_updates": "🔍 Sprawdź aktualizacje",
-        "rooms_label": "🛋️ Pomieszczenia",
+        "rooms_label": "🏦 Pomieszczenia",
 
-
-        # Onboarding
         "welcome_title": "Witaj w Philips Hue App by Piotr Kawa",
         "current_version": "Aktualnie zainstalowana wersja: {version}",
         "searching_bridge": "🔍 Trwa wyszukiwanie mostka...",
@@ -25,7 +25,6 @@ translations = {
         "waiting_for_button": "⌛ Oczekiwanie na przycisk na mostku (30s)...",
         "token_received": "✅ Token uzyskany! Uruchamiam aplikację...",
 
-        # Bridge
         "groups_loaded": "✅ Grupy załadowane",
         "fetch_groups_error": "❌ Błąd pobierania grup",
         "bridge_reset": "🔄 Zresetowano konfigurację mostka.",
@@ -36,16 +35,15 @@ translations = {
         "token_success": "✅ Połączono z mostkiem!",
         "token_fail": "❌ Nie udało się uzyskać tokenu.",
         "config_load_error": "❌ Błąd wczytywania configu: {e}",
-        "language_label": "🌍 Language:",
-        "config_save_error": "❌ Błąd zapisu configu: {e}"
-
+        "config_save_error": "❌ Błąd zapisu configu: {e}",
+        "language_label": "🌍 Język:",
     },
 
     "en": {
         "app_title": "Philips Hue App",
         "welcome_text": "Welcome to the Philips Hue App",
         "sensor_error": "Sensor error: {e}",
-        "motion_detected": "Motion detected! 🕺 ({formatted_time})",
+        "motion_detected": "Motion detected! 🚺 ({formatted_time})",
         "last_motion": "Last motion: {formatted_time}",
         "no_motion_sensors": "No motion sensors found.",
         "no_temperature_sensors": "No temperature sensors found.",
@@ -53,7 +51,6 @@ translations = {
         "devices_status": "Detected: {lights} lights, {temps} temp., {motions} motion sensors",
         "check_updates": "🔍 Check for updates",
 
-        # Onboarding
         "welcome_title": "Welcome to the Philips Hue App by Piotr Kawa",
         "current_version": "Currently installed version: {version}",
         "searching_bridge": "🔍 Searching for bridge...",
@@ -65,7 +62,6 @@ translations = {
         "waiting_for_button": "⌛ Waiting for bridge button (30s)...",
         "token_received": "✅ Token received! Starting app...",
 
-        # Bridge
         "groups_loaded": "✅ Groups loaded",
         "fetch_groups_error": "❌ Failed to fetch groups",
         "bridge_reset": "🔄 Bridge configuration reset.",
@@ -78,6 +74,8 @@ translations = {
         "config_load_error": "❌ Error loading config: {e}",
         "config_save_error": "❌ Error saving config: {e}",
         "language_label": "🌍 Language:",
-        "rooms_label": "🛋️ Rooms",
+        "rooms_label": "🏦 Rooms",
+        "motion_detected_short": "Motion detected",
+        "last_motion_short": "Last motion",
     }
 }

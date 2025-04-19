@@ -1,8 +1,9 @@
-import customtkinter as ctk
-import requests
+from PyQt6.QtWidgets import QLabel, QFrame, QVBoxLayout, QScrollArea, QWidget
 from datetime import datetime
 from zoneinfo import ZoneInfo
-import translations  # Dodanie importu tłumaczeń
+import requests
+import translations
+
 
 class SensorManager:
     def __init__(self, app, bridge):
@@ -10,87 +11,115 @@ class SensorManager:
         self.bridge = bridge
         self.sensors = {}
 
+        self.sensor_label = None
+        self.motion_label = None
+        self.devices_status_label = None
+
+        print("📡 SensorManager initialized")
+
     def create_info_frame(self):
-        frame = ctk.CTkFrame(self.app)
-        frame.pack(pady=5, padx=10, fill="x")
+        frame = QFrame()
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(10, 2, 10, 2)
+        layout.setSpacing(1)  # Mniejsze odstępy
 
-        sensor_label = ctk.CTkLabel(frame, text="", font=ctk.CTkFont(size=13))
-        sensor_label.pack(pady=2)
+        self.motion_label = QLabel()
+        self.motion_label.setStyleSheet("font-size: 10px; color: white; background-color: transparent; line-height: 1;")
+        self.motion_label.setWordWrap(True)
+        layout.addWidget(self.motion_label)
 
-        motion_label = ctk.CTkLabel(frame, text="", font=ctk.CTkFont(size=13))
-        motion_label.pack(pady=2)
+        self.devices_status_label = QLabel()
+        self.devices_status_label.setStyleSheet("font-size: 10px; color: white; background-color: transparent; line-height: 1;")
+        layout.addWidget(self.devices_status_label)
 
-        devices_status_label = ctk.CTkLabel(frame, text="", font=ctk.CTkFont(size=12, weight="normal"))
-        devices_status_label.pack(pady=5)
+        self.sensor_label = QLabel()
+        self.sensor_label.setStyleSheet("font-size: 10px; color: white; background-color: transparent; line-height: 1;")
+        layout.addWidget(self.sensor_label)
 
-        self.sensor_label = sensor_label
-        self.motion_label = motion_label
-        self.devices_status_label = devices_status_label
-        return frame, sensor_label, motion_label, devices_status_label
+        print("💛 Sensor info frame created")
+        return frame, self.sensor_label, self.motion_label, self.devices_status_label
 
     def create_motion_list_frame(self):
-        frame = ctk.CTkScrollableFrame(self.app, width=600, height=150)
-        frame.pack(pady=5, padx=10, fill="both", expand=False)
-        self.motion_list_frame = frame
-        return frame
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFixedHeight(150)
+
+        frame = QWidget()
+        scroll_area.setWidget(frame)
+
+        print("💛 Motion list scroll area created")
+        return scroll_area
 
     def fetch(self):
         try:
             url = f"http://{self.bridge.bridge_ip}/api/{self.bridge.token}/sensors"
+            print(f"🌐 Fetching sensors from {url}")
             self.sensors = requests.get(url).json()
+            print(f"📡 Sensors fetched: {list(self.sensors.keys())}")
 
             temps = [
                 s['state']['temperature'] / 100.0
                 for s in self.sensors.values()
                 if s.get('type') == 'ZLLTemperature'
             ]
-            if temps and hasattr(self, "sensor_label"):
-                avg_temp = sum(temps) / len(temps)
-                self.sensor_label.configure(text=translations.translations[self.app.language]["average_temperature"].format(avg_temp=avg_temp))
-            elif hasattr(self, "sensor_label"):
-                self.sensor_label.configure(text=translations.translations[self.app.language]["no_temperature_sensors"])
 
             motions = [
-                (s['name'], s['state']['presence'], s['state'].get('lastupdated', ''))
+                (s.get('name', 'Unknown'), s['state']['presence'], s['state'].get('lastupdated', ''))
                 for s in self.sensors.values()
                 if s.get('type') == 'ZLLPresence'
             ]
 
-            if hasattr(self, "motion_label"):
+            if self.motion_label:
                 if motions:
-                    last_motion = next((t for _, p, t in motions if p), motions[0][2])
-                    try:
-                        from datetime import datetime
-                        from zoneinfo import ZoneInfo
-                        last_time = datetime.strptime(last_motion, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=ZoneInfo("UTC"))
-                        local_time = last_time.astimezone()
-                        formatted_time = local_time.strftime("%H:%M:%S")
-                    except:
-                        formatted_time = last_motion
+                    motion_texts = []
+                    for name, presence, last_updated in motions:
+                        try:
+                            last_time = datetime.strptime(last_updated, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=ZoneInfo("UTC"))
+                            local_time = last_time.astimezone()
+                            formatted_time = local_time.strftime("%H:%M:%S")
+                        except Exception as e:
+                            print(f"⚠️ Time parsing error: {e}")
+                            formatted_time = last_updated
 
-                    if any(p for _, p, _ in motions):
-                        self.motion_label.configure(text=translations.translations[self.app.language]["motion_detected"].format(formatted_time=formatted_time))
-                    else:
-                        self.motion_label.configure(text=translations.translations[self.app.language]["last_motion"].format(formatted_time=formatted_time))
+                        name_html = f"<div style='text-align:center; font-weight:bold;'>{name}</div>"
+
+                        if presence:
+                            state_text = f"🚨 {translations.translations[self.app.language]['motion_detected_short']} ({formatted_time})"
+                        else:
+                            state_text = f"🕐 {translations.translations[self.app.language]['last_motion_short']} ({formatted_time})"
+
+                        sensor_block = f"{name_html}<div style='margin:0px;'>{state_text}</div>"
+                        motion_texts.append(sensor_block)
+
+                    self.motion_label.setText("<hr style='margin:1px 0;'>".join(motion_texts))
                 else:
-                    self.motion_label.configure(text=translations.translations[self.app.language]["no_motion_sensors"])
+                    print("🚶 No motion sensors found")
+                    self.motion_label.setText(translations.translations[self.app.language]["no_motion_sensors"])
 
-            if hasattr(self, "devices_status_label"):
-                self.devices_status_label.configure(
-                    text=translations.translations[self.app.language]["devices_status"].format(
+            if self.devices_status_label:
+                print(f"📊 Updating devices status: {len(self.app.lights.lights)} lights, {len(temps)} temps, {len(motions)} motions")
+                self.devices_status_label.setText(
+                    translations.translations[self.app.language]["devices_status"].format(
                         lights=len(self.app.lights.lights),
                         temps=len(temps),
                         motions=len(motions)
                     )
                 )
 
-        except Exception as e:
-            if hasattr(self, "sensor_label"):
-                self.sensor_label.configure(text=translations.translations[self.app.language]["sensor_error"].format(e=e))
-            if hasattr(self, "motion_label"):
-                self.motion_label.configure(text="")
+            if self.sensor_label:
+                if temps:
+                    avg_temp = sum(temps) / len(temps)
+                    print(f"🌡️ Average temperature: {avg_temp:.2f}°C")
+                    self.sensor_label.setText(
+                        translations.translations[self.app.language]["average_temperature"].format(avg_temp=avg_temp)
+                    )
+                else:
+                    print("🌡️ No temperature sensors found")
+                    self.sensor_label.setText(translations.translations[self.app.language]["no_temperature_sensors"])
 
         except Exception as e:
-            self.sensor_label.configure(text=translations.translations[self.app.language]["sensor_error"].format(e=e))
-            self.motion_label.configure(text="")
-
+            print(f"❌ Error fetching sensor data: {e}")
+            if self.sensor_label:
+                self.sensor_label.setText(translations.translations[self.app.language]["sensor_error"].format(e=e))
+            if self.motion_label:
+                self.motion_label.setText("")

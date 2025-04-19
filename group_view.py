@@ -1,51 +1,51 @@
-import customtkinter as ctk
-import tkinter.colorchooser as cc
+from PyQt6.QtWidgets import QWidget, QLabel, QPushButton, QSlider, QVBoxLayout, QHBoxLayout, QColorDialog
 import requests
 
 
-class GroupView(ctk.CTkFrame):
-    def __init__(self, master, app, group_id, group_info, lights, on_back_callback):
-        super().__init__(master)
+class GroupView(QWidget):
+    def __init__(self, parent, app, group_id, group_info, lights, on_back_callback):
+        super().__init__(parent)
         self.app = app
         self.group_id = group_id
         self.group_info = group_info
         self.lights = lights
         self.on_back = on_back_callback
 
-        self.pack(fill="both", expand=True, padx=10, pady=10)
+        self.main_layout = QVBoxLayout(self)
 
-        # === Wróć ===
-        back_btn = ctk.CTkButton(self, text="↩️ Wróć do grup", command=self.on_back)
-        back_btn.pack(pady=10)
+        back_btn = QPushButton("\u21A9\uFE0F Wróć do grup")
+        back_btn.clicked.connect(self.on_back)
+        self.main_layout.addWidget(back_btn)
 
-        # === Lista świateł ===
         for light_id in group_info.get("lights", []):
             light_info = lights.get(light_id)
             if not light_info:
                 continue
 
-            light_frame = ctk.CTkFrame(self, corner_radius=10)
-            light_frame.pack(pady=6, fill="x", padx=12)
+            light_frame = QWidget()
+            light_layout = QHBoxLayout(light_frame)
 
-            label = ctk.CTkLabel(light_frame, text=light_info["name"], font=app.font_normal)
-            label.pack(side="left", padx=10)
+            label = QLabel(light_info["name"])
+            light_layout.addWidget(label)
 
-            toggle = ctk.CTkButton(
-                light_frame,
-                text="Wyłącz" if light_info["state"]["on"] else "Włącz",
-                width=80,
-                command=lambda i=light_id: self.toggle_light(i)
-            )
-            toggle.pack(side="right", padx=10)
+            toggle_btn = QPushButton("Wy\u0142\u0105cz" if light_info["state"]["on"] else "W\u0142\u0105cz")
+            toggle_btn.clicked.connect(lambda _, i=light_id: self.toggle_light(i))
+            light_layout.addWidget(toggle_btn)
 
             if "bri" in light_info["state"]:
-                slider = ctk.CTkSlider(light_frame, from_=1, to=254)
-                slider.set(light_info["state"]["bri"])
-                slider.pack(side="right", padx=10, fill="x", expand=True)
-                slider.bind("<ButtonRelease-1>", lambda e, i=light_id, s=slider: self.set_brightness(i, s.get()))
+                slider = QSlider()
+                slider.setMinimum(1)
+                slider.setMaximum(254)
+                slider.setValue(light_info["state"]["bri"])
+                slider.setOrientation(1)  # Horizontal
+                slider.sliderReleased.connect(lambda i=light_id, s=slider: self.set_brightness(i, s.value()))
+                light_layout.addWidget(slider)
 
-            color_btn = ctk.CTkButton(light_frame, text="Kolor", width=60, command=lambda i=light_id: self.choose_color(i))
-            color_btn.pack(side="right", padx=10)
+            color_btn = QPushButton("Kolor")
+            color_btn.clicked.connect(lambda _, i=light_id: self.choose_color(i))
+            light_layout.addWidget(color_btn)
+
+            self.main_layout.addWidget(light_frame)
 
     def toggle_light(self, light_id):
         light = self.lights[light_id]
@@ -53,25 +53,26 @@ class GroupView(ctk.CTkFrame):
         url = f"http://{self.app.bridge.bridge_ip}/api/{self.app.bridge.token}/lights/{light_id}/state"
         try:
             requests.put(url, json={"on": new_state})
-            self.app.bridge.update_status("💡 Zmieniono stan światła", "white")
+            self.app.bridge.update_status("\U0001F4A1 Zmieniono stan \u015bwiat\u0142a")
         except Exception as e:
-            self.app.bridge.update_status(f"❌ Błąd: {e}", "red")
+            self.app.bridge.update_status(f"\u274C B\u0142\u0105d: {e}")
 
     def set_brightness(self, light_id, bri):
         url = f"http://{self.app.bridge.bridge_ip}/api/{self.app.bridge.token}/lights/{light_id}/state"
         try:
             requests.put(url, json={"bri": int(bri), "on": True})
-            self.app.bridge.update_status("🔆 Zmieniono jasność", "white")
+            self.app.bridge.update_status("\U0001F507 Zmieniono jasno\u015b\u0107")
         except Exception as e:
-            self.app.bridge.update_status(f"❌ Błąd jasności: {e}", "red")
+            self.app.bridge.update_status(f"\u274C B\u0142\u0105d jasno\u015bci: {e}")
 
     def choose_color(self, light_id):
-        rgb, _ = cc.askcolor()
-        if rgb:
-            x, y = self.app.rgb_to_xy(*rgb)
+        color = QColorDialog.getColor()
+        if color.isValid():
+            r, g, b = color.red(), color.green(), color.blue()
+            x, y = self.app.rgb_to_xy(r, g, b)
             url = f"http://{self.app.bridge.bridge_ip}/api/{self.app.bridge.token}/lights/{light_id}/state"
             try:
                 requests.put(url, json={"xy": [x, y], "on": True})
-                self.app.bridge.update_status("🌈 Kolor ustawiony", "white")
+                self.app.bridge.update_status("\U0001F308 Kolor ustawiony")
             except Exception as e:
-                self.app.bridge.update_status(f"❌ Błąd koloru: {e}", "red")
+                self.app.bridge.update_status(f"\u274C B\u0142\u0105d koloru: {e}")
