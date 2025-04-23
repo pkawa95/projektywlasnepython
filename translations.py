@@ -37,6 +37,9 @@ translations = {
         "config_load_error": "❌ Błąd wczytywania configu: {e}",
         "config_save_error": "❌ Błąd zapisu configu: {e}",
         "language_label": "🌍 Język:",
+        "turn_on": "Włącz",
+        "turn_off": "Wyłącz",
+        "color": "Kolor",
     },
 
     "en": {
@@ -77,5 +80,8 @@ translations = {
         "rooms_label": "🏦 Rooms",
         "motion_detected_short": "Motion detected",
         "last_motion_short": "Last motion",
+        "turn_on": "Turn on",
+        "turn_off": "Turn off",
+        "color": "Color",
     }
 }

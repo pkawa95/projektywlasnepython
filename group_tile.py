@@ -1,9 +1,34 @@
-from PyQt6.QtWidgets import QWidget, QLabel, QSlider, QVBoxLayout, QHBoxLayout
-from PyQt6.QtGui import QPixmap, QPainter, QLinearGradient, QColor, QImage, QPainterPath
+from PyQt6.QtWidgets import QWidget, QLabel, QSlider, QVBoxLayout, QHBoxLayout, QPushButton
+from PyQt6.QtGui import QPixmap, QPainter, QLinearGradient, QColor, QImage, QPainterPath, QPen, QFont, QRadialGradient
 from PyQt6.QtCore import Qt, QTimer
-
 import requests
+from threading import Timer
 
+class StrokeLabel(QLabel):
+    def __init__(self, text):
+        super().__init__(text)
+        self.setFont(QFont("Arial", 15, QFont.Weight.Bold))
+        self.setStyleSheet("background-color: transparent;")
+        self.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+
+        text = self.text()
+        rect = self.rect()
+        alignment = self.alignment()
+
+        shadow_pen = QPen(QColor(0, 0, 0, 160))
+        painter.setPen(shadow_pen)
+        painter.drawText(rect.translated(1, 1), alignment, text)
+
+        stroke_pen = QPen(QColor("black"), 3)
+        painter.setPen(stroke_pen)
+        painter.drawText(rect, alignment, text)
+
+        painter.setPen(QPen(QColor("white")))
+        painter.drawText(rect, alignment, text)
 
 class GroupTile(QWidget):
     def __init__(self, parent, app, group_id, group_info, on_double_click):
@@ -17,7 +42,6 @@ class GroupTile(QWidget):
 
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
         self.setFixedHeight(100)
-
         self.setStyleSheet("""
             QWidget {
                 border-radius: 12px;
@@ -31,6 +55,9 @@ class GroupTile(QWidget):
         self.background_label = QLabel(self)
         self.background_label.lower()
 
+        self.live_brightness_timer = None
+        self._cached_pixmap_key = None
+
         self.build_ui()
         self.defer_gradient_update()
 
@@ -38,30 +65,61 @@ class GroupTile(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 12)
 
-        name_label = QLabel(self.group_info.get("name", "Unnamed"))
-        name_label.setStyleSheet("""
-            QLabel {
-                background-color: transparent;
+        name_label = StrokeLabel(self.group_info.get("name", "Unnamed"))
+
+        arrow_btn = QPushButton("▶")
+        arrow_btn.setFixedSize(28, 28)
+        arrow_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(0,0,0,40);
+                border: none;
                 color: white;
-                font-size: 16px;
                 font-weight: bold;
+                font-size: 14px;
+                border-radius: 14px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255,255,255,40);
             }
         """)
+        arrow_btn.clicked.connect(lambda: self.on_double_click(self.group_id))
 
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.setMinimum(1)
         self.slider.setMaximum(254)
         self.slider.setValue(self.group_info.get("action", {}).get("bri", 254))
+        self.slider.valueChanged.connect(self.schedule_live_brightness_update)
         self.slider.setStyleSheet("margin-left: 4px; margin-right: 4px;")
-        self.slider.sliderReleased.connect(self.set_brightness)
+        self.slider.sliderReleased.connect(self.on_slider_released)
 
         top_layout = QHBoxLayout()
         top_layout.addWidget(name_label)
         top_layout.addStretch()
+        top_layout.addWidget(arrow_btn)
 
         layout.addLayout(top_layout)
         layout.addWidget(self.slider)
         self.setLayout(layout)
+
+    def schedule_live_brightness_update(self, value):
+        if self.live_brightness_timer:
+            self.live_brightness_timer.cancel()
+        self.live_brightness_timer = Timer(0.15, self.send_live_brightness, args=[value])
+        self.live_brightness_timer.start()
+
+    def send_live_brightness(self, value):
+        url = f"http://{self.app.bridge.bridge_ip}/api/{self.app.bridge.token}/groups/{self.group_id}/action"
+        try:
+            requests.put(url, json={"bri": value, "on": True}, timeout=1)
+            print(f"⚡ Sent brightness update {value}")
+        except Exception as e:
+            print(f"❌ Error in live update: {e}")
+
+    def on_slider_released(self):
+        value = self.slider.value()
+        self.send_live_brightness(value)
+        self._cached_pixmap_key = None
+        self.update_gradient_image()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -69,6 +127,7 @@ class GroupTile(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._cached_pixmap_key = None
         self.update_gradient_image()
 
     def defer_gradient_update(self):
@@ -130,6 +189,11 @@ class GroupTile(QWidget):
     def generate_gradient_image(self):
         width = self.width()
         height = self.height()
+        key = (width, height, self.group_info.get("action", {}).get("bri", 254))
+
+        if key == self._cached_pixmap_key:
+            return self.background_label.pixmap()
+
         image = QImage(width, height, QImage.Format.Format_ARGB32)
         image.fill(Qt.GlobalColor.transparent)
 
@@ -166,8 +230,22 @@ class GroupTile(QWidget):
                 gradient.setColorAt(pos, color)
 
         painter.fillRect(0, 0, width, height, gradient)
+
+        bri = self.group_info.get("action", {}).get("bri", 254)
+        opacity = 1.0 - (bri / 254.0)
+        opacity = min(max(opacity, 0.0), 1.0)
+
+        soft_shadow = QRadialGradient(width / 2, height / 2, max(width, height) / 1.25)
+        soft_shadow.setColorAt(0.0, QColor(0, 0, 0, int(opacity * 120)))
+        soft_shadow.setColorAt(0.6, QColor(0, 0, 0, int(opacity * 80)))
+        soft_shadow.setColorAt(1.0, QColor(0, 0, 0, 0))
+
+        painter.fillRect(0, 0, width, height, soft_shadow)
+
         painter.end()
-        return QPixmap.fromImage(image)
+        pixmap = QPixmap.fromImage(image)
+        self._cached_pixmap_key = key
+        return pixmap
 
     def update_gradient_image(self):
         try:
@@ -184,4 +262,5 @@ class GroupTile(QWidget):
         self.group_info = group_info
         bri = group_info.get("action", {}).get("bri", 254)
         self.slider.setValue(bri)
+        self._cached_pixmap_key = None
         self.update_gradient_image()
