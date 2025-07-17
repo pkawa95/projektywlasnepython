@@ -11,6 +11,7 @@ from sensor_manager import SensorManager
 from lightpanel import LightPanel
 from config import VERSION, UPDATE_URL
 import sys, requests, translations
+from onboarding import OnboardingWindow
 
 class HueGUIApp(QMainWindow):
     def __init__(self):
@@ -152,6 +153,17 @@ class HueGUIApp(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = HueGUIApp()
-    window.show()
+    bridge = HueBridge()
+
+    if not bridge.token or not bridge.bridge_ip:
+        def launch_main_app():
+            window = HueGUIApp()
+            window.show()
+
+        onboarding = OnboardingWindow(bridge=bridge, proceed_callback=launch_main_app)
+        onboarding.exec()
+    else:
+        window = HueGUIApp()
+        window.show()
+
     sys.exit(app.exec())

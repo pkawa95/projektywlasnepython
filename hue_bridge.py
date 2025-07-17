@@ -5,6 +5,8 @@ import threading
 import time
 import translations
 from PyQt6.QtCore import QTimer
+import ipaddress
+import concurrent.futures
 
 CONFIG_FILE = "hue_config.json"
 DISCOVERY_URL = "https://discovery.meethue.com"
@@ -90,27 +92,65 @@ class HueBridge:
             self.update_status(self.translate("config_save_error", e=e), "red")
             print(f"❌ Failed to save config: {e}")
 
-    def connect_fully_automatic(self, callback_on_success):
+    def connect_fully_automatic(self, callback_on_found):
         self.update_status(self.translate("bridge_searching"), "black")
         print("🌐 Starting bridge discovery...")
 
         def connect():
             try:
-                response = requests.get(DISCOVERY_URL, timeout=5).json()
-                if not response:
+                response = requests.get(DISCOVERY_URL, timeout=5)
+                print(f"📡 Discovery response: {response.text}")
+                try:
+                    data = response.json()
+                except Exception as e:
+                    print(f"❌ Failed to parse discovery JSON: {e}")
+                    data = []
+
+                if data:
+                    self.bridge_ip = data[0]["internalipaddress"]
+                    print(f"✅ Found via discovery: {self.bridge_ip}")
+                else:
+                    print("⚠️ Discovery empty, scanning LAN...")
+                    self.bridge_ip = self.local_scan_for_bridge("192.168.1.0/24")
+
+                if not self.bridge_ip:
                     self.update_status(self.translate("bridge_not_found"), "red")
-                    print("❌ No bridges found")
+                    print("❌ No bridge found in LAN or Discovery")
                     return
-                self.bridge_ip = response[0]["internalipaddress"]
+
                 self.save_config()
                 self.update_status(self.translate("bridge_found", ip=self.bridge_ip), "green")
-                print(f"✅ Bridge found at: {self.bridge_ip}")
-                self.request_token(callback_on_success)
+                print(f"✅ Bridge IP: {self.bridge_ip}")
+                # ✅ TYLKO callback informacyjny — BEZ request_token
+                QTimer.singleShot(0, callback_on_found)
+
             except Exception as e:
                 self.update_status(self.translate("connection_error", e=e), "red")
                 print(f"❌ Error during bridge discovery: {e}")
 
-        threading.Thread(target=connect).start()
+        threading.Thread(target=connect, daemon=True).start()
+
+    def local_scan_for_bridge(self, network_cidr="192.168.1.0/24"):
+        def check_ip(ip):
+            try:
+                res = requests.get(f"http://{ip}/description.xml", timeout=0.5)
+                if "Philips hue bridge" in res.text:
+                    print(f"✅ Local scan found bridge at {ip}")
+                    return ip
+            except:
+                pass
+            return None
+
+        ips = list(ipaddress.IPv4Network(network_cidr).hosts())
+        found_ip = None
+        with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+            futures = {executor.submit(check_ip, str(ip)): ip for ip in ips}
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                if result:
+                    found_ip = result
+                    break
+        return found_ip
 
     def request_token(self, callback_on_success):
         self.update_status(self.translate("press_button"), "black")
@@ -140,3 +180,4 @@ class HueBridge:
             print("❌ Token request failed after 30s")
 
         threading.Thread(target=wait_for_button).start()
+
